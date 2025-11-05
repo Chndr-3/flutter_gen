@@ -41,12 +41,6 @@ class SvgIntegration extends Integration {
   final Set<String> flavors;
   final bool _isVecFormat;
 
-  // 🧠 Global cache for identical SVG instances
-  static final Map<String, _svg.SvgPicture> _cache = {};
-
-  // Optional global flag to enable/disable caching
-  static bool enableGlobalCache = true;
-
 ${isPackage ? "\n  static const String package = '$packageName';" : ''}
 
   _svg.SvgPicture svg({
@@ -68,16 +62,8 @@ ${isPackage ? "\n  static const String package = '$packageName';" : ''}
     Clip clipBehavior = Clip.hardEdge,
     @deprecated Color? color,
     @deprecated BlendMode colorBlendMode = BlendMode.srcIn,
-    @deprecated bool cacheColorFilter = false, // ✅ default to true
+    @deprecated bool cacheColorFilter = false,
   }) {
-  
-final cacheKey = '\${_assetName}-\${colorFilter?.hashCode}-\${color?.value}-\${width ?? 0}-\${height ?? 0}-\${fit.name}-\${alignment.hashCode}';
-
-
-    if (enableGlobalCache && _cache.containsKey(cacheKey)) {
-      return _cache[cacheKey]!;
-    }
-
     final _svg.BytesLoader loader;
     if (_isVecFormat) {
       loader = _vg.AssetBytesLoader(
@@ -94,30 +80,22 @@ final cacheKey = '\${_assetName}-\${colorFilter?.hashCode}-\${color?.value}-\${w
         colorMapper: colorMapper,
       );
     }
-
-    final picture = _svg.SvgPicture(
+    return _svg.SvgPicture(
       loader,
       key: key,
       matchTextDirection: matchTextDirection,
-      width: width ?? size?.width,
-      height: height ?? size?.height,
+      width: width,
+      height: height,
       fit: fit,
       alignment: alignment,
       allowDrawingOutsideViewBox: allowDrawingOutsideViewBox,
       placeholderBuilder: placeholderBuilder,
       semanticsLabel: semanticsLabel,
       excludeFromSemantics: excludeFromSemantics,
-      colorFilter: colorFilter ??
-          (color == null ? null : ColorFilter.mode(color, colorBlendMode)),
+      colorFilter: colorFilter ?? (color == null ? null : ColorFilter.mode(color, colorBlendMode)),
       clipBehavior: clipBehavior,
       cacheColorFilter: cacheColorFilter,
     );
-
-    if (enableGlobalCache) {
-      _cache[cacheKey] = picture;
-    }
-
-    return picture;
   }
 
   String get path => _assetName;
@@ -132,6 +110,7 @@ final cacheKey = '\${_assetName}-\${colorFilter?.hashCode}-\${color?.value}-\${w
 
   @override
   String classInstantiate(AssetType asset) {
+    // Query extra information about the SVG.
     final info = parseMetadata ? _getMetadata(asset) : null;
     final buffer = StringBuffer(className);
     if (asset.extension == '.vec' ||
@@ -147,7 +126,8 @@ final cacheKey = '\${_assetName}-\${colorFilter?.hashCode}-\${color?.value}-\${w
       buffer.write(', flavors: {');
       final flavors = asset.flavors.map((e) => '\'$e\'').join(', ');
       buffer.write(flavors);
-      buffer.write('},'); // Improved formatting
+      buffer.write('}');
+      buffer.write(','); // Better formatting.
     }
     buffer.write(')');
     return buffer.toString();
@@ -155,6 +135,9 @@ final cacheKey = '\${_assetName}-\${colorFilter?.hashCode}-\${color?.value}-\${w
 
   ImageMetadata? _getMetadata(AssetType asset) {
     try {
+      // The SVG file is read fully, then parsed with the vector_graphics
+      // library. This is quite a heavy way to extract just the dimensions,
+      // but it's also the same way it will be eventually rendered by Flutter.
       final svg = File(asset.fullPath).readAsStringSync();
       final vec = parseWithoutOptimizers(svg);
       return ImageMetadata(
