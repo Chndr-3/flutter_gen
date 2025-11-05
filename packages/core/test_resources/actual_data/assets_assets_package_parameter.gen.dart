@@ -177,6 +177,9 @@ class SvgGenImage {
   final Set<String> flavors;
   final bool _isVecFormat;
 
+  static final Map<String, _svg.SvgPicture> _cache = {};
+  static bool enableGlobalCache = true;
+
   static const String package = 'test';
 
   _svg.SvgPicture svg({
@@ -201,6 +204,13 @@ class SvgGenImage {
     @deprecated BlendMode colorBlendMode = BlendMode.srcIn,
     @deprecated bool cacheColorFilter = false,
   }) {
+    final cacheKey =
+        '${_assetName}-${colorFilter?.hashCode}-${color?.value}-${width ?? 0}-${height ?? 0}-${fit.name}-${alignment.hashCode}';
+
+    if (enableGlobalCache && _cache.containsKey(cacheKey)) {
+      return _cache[cacheKey]!;
+    }
+
     final _svg.BytesLoader loader;
     if (_isVecFormat) {
       loader = _vg.AssetBytesLoader(
@@ -217,12 +227,13 @@ class SvgGenImage {
         colorMapper: colorMapper,
       );
     }
-    return _svg.SvgPicture(
+
+    final picture = _svg.SvgPicture(
       loader,
       key: key,
       matchTextDirection: matchTextDirection,
-      width: width,
-      height: height,
+      width: width ?? size?.width,
+      height: height ?? size?.height,
       fit: fit,
       alignment: alignment,
       allowDrawingOutsideViewBox: allowDrawingOutsideViewBox,
@@ -235,6 +246,12 @@ class SvgGenImage {
       clipBehavior: clipBehavior,
       cacheColorFilter: cacheColorFilter,
     );
+
+    if (enableGlobalCache) {
+      _cache[cacheKey] = picture;
+    }
+
+    return picture;
   }
 
   String get path => _assetName;
